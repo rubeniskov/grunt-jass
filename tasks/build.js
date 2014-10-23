@@ -2,13 +2,11 @@ module.exports = function(grunt)
 {
     var und             = grunt.util._,
 
-        deasync         = require('deasync'),
-
         path            = require( 'path' ),
 
         requirejs       = require( 'requirejs' ),
 
-        gitclone        = require( 'nodegit').Repo.clone,
+        shell           = require( 'shelljs' ),
 
         project_path    = process.cwd(),
 
@@ -65,71 +63,55 @@ module.exports = function(grunt)
             return _path;
         },
 
-        resolveLibs     = function( libraries, base )
+        resolveLibs     = function( modules, base )
         {
-            var libs    = {};
+            var mods    = {};
 
-            und.each( libraries, function( lib, lib_name )
+            und.each( modules, function( mod, mod_name )
             {
-                libs[ lib_name ]    = resolvePath( lib.dist || lib, base );
+                typeof mod == "string" && ( mod = { dist : mod } );
 
-                lib.dirname         = resolvePath( lib_name, base );
+                mod.dirname         = resolvePath( mod_name, base );
 
-                lib.dist            = resolvePath( lib.dist, lib.dirname );
+                mods[ mod_name ]    = mod.dist  = resolvePath( mod.dist, mod.dirname ).replace( /\.js$/, '' );
 
-                if( lib.modules )
-                    libs = und.extend( libs, resolveLibs( lib.modules, base ) );
+                und.each( mod.modules, function( smod, smod_name )
+                {
+                    mods[ smod_name ] = resolvePath( smod, mod.dirname ).replace( /\.js$/, '' );
+                });
             });
 
-            return libs;
+            return mods;
         },
 
-        spawn           = function( cmd, params, callback )
+        exec            = function( cmd )
         {
-            var current     = 0
+            var result  = shell.exec( cmd );
 
-                delay       = 10,
-
-                timeout     = 60000, 
-
-                sync        = false;
-
-            grunt.util.spawn({ cmd : cmd, args : params }, function( error, result, code )
+            switch( result.code )
             {
-                sync        = true;
-
-                callback && callback.call && callback.call( null, error, result, code );
-            });
-
-            while( !sync )
-            {
-                deasync.sleep( delay );
-
-                if( current > timeout )
-                {
-                    callback && callback.call && callback.call( null, 'TIMEOUT', 
-                    {
-                        stdout : 'Timeout exceded'
-                    }, -1 );
-
-                    break;
-                }
-
-                current += delay;
+                case 0:
+                    grunt.log.ok( result.output );
+                break;
+                case 1:
+                case 2:
+                    grunt.log.error( result.output );
+                break;
+                default:
+                    grunt.verbose.write( result.output );
+                break;
             }
 
-            return sync
+            return result.code;
         },
 
         clone           = function( name, git, branch )
         {
-            grunt.log.subhead( 'Cloning [' + name + '][ ver: ' + branch + ']\n\t' + git );
+            grunt.log.subhead( 'Cloning [ ' + name + ' ][ ver: ' + branch + ' ]\n\t' + git );
 
-            return spawn( 'git',[ 'clone', git, path.join( project_path, 'lib', name ) ], '--branch ' + branch, function( error, result, code )
-            {
-                console.log( arguments );
-                grunt.log.writeln( result.stdout );
-            });
+            var result  = exec( 'git clone ' + git + ' ' + path.join( project_path, 'lib', name ) + ' --branch ' + branch );
+
+            return result === 128 || result === 0;
         },
 
         compile         = function( name, module, options )
@@ -138,49 +120,48 @@ module.exports = function(grunt)
 
                 gruntfile   = path.join( module.dirname, 'Gruntfile.js' );
 
-            grunt.log.subhead( 'Prepare to compile ' + name);
+            grunt.log.subhead( 'Prepare to compile [ ' + name + ' ][ ver: ' + module.version + ' ]' );
 
             (function( build )
             {
                 build.call && build.call
                 ({
-                    npm   : function( cmd )
+                    module  : module,
+
+                    npm     : function()
                     {
-                        console.log( arguments, module.dirname, 'cd ' + module.dirname + ' && ' + cmd  );
+                        var params      = Array.prototype.slice.call( arguments );
 
-                        return spawn.call( null, npm + ' -C ' + module.dirname );
-                    }
-                },
-                function()
-                {
-                    params      = Array.prototype.slice.call( arguments );
+                        shell.cd( module.dirname );
 
-                    params.push( '--gruntfile=' + gruntfile );
+                        grunt.verbose.writeln( 'Execute: ' + 'sudo npm ' + params.join( ' ' ) );
 
-                    grunt.log.subhead( 'Compiling ' + name + ' with ' + ( params.length ?  params.join( ' ' ) : 'no params' ) );
-
-                    grunt.verbose.writeln( 'Gruntfile: ' + gruntfile );
-
-                    spawn( 'grunt',params, function( error, result, code )
+                        return shell.exec( 'sudo npm ' + params.join( ' ' ) ).code !== 0;
+                    },
+                    grunt   : function()
                     {
-                        if( error )
-                            console.log( error );
+                        var params      = Array.prototype.slice.call( arguments );
 
-                        grunt.log.writeln( result.stdout );
+                        params.push( '--gruntfile=' + gruntfile );
 
-                        contents = grunt.file.read( target,
+                        grunt.log.subhead( 'Compiling ' + name + ' with ' + ( params.length ?  params.join( ' ' ) : 'no params \n' ) );
+
+                        grunt.verbose.writeln( 'Gruntfile: ' + gruntfile );
+
+                        if( shell.exec( 'grunt ' + params.join( ' ' ) ).code !== 0 )
                         {
-                            encoding: 'UTF8'    
-                        });
-                    });
+                            contents = grunt.file.read( module.dist,
+                            {
+                                encoding: 'UTF8'    
+                            });
+                        };
+                    }
                 });
             })
-            ( module.build || function()
+            ( module.build || function( compile )
             {
                 console.log( 'Nothing to compile' );
             });
-
-            params.push( '--gruntfile='+gruntfile );
 
             return contents;
         },
@@ -274,7 +255,7 @@ module.exports = function(grunt)
 
         und.each( config, function( build, build_name ) 
         {
-            grunt.log.subhead( 'Checking [' + build_name + '] build' );
+            grunt.log.subhead( 'Checking [ ' + build_name + ' ] build' );
 
             build.files     = build.files || {};
 
