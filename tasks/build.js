@@ -46,11 +46,11 @@ module.exports = function(grunt)
 
             options.libraries       = resolvePath( options.libraries    || defaults.libraries ),
 
-            options.patches         = resolvePath( options.patches      || defaults.patches ),
-
             options.source          = resolvePath( options.source       || defaults.source ),
 
-            options.paths           = resolveLibs( options.dependencies || defaults.dependencies, options.libraries )
+            options.patches         = resolvePath( options.patches       || defaults.patches ),
+
+            options.paths           = resolveLibs( options.dependencies || defaults.dependencies, options.patches, options.libraries );
 
             return options;
         },
@@ -63,7 +63,7 @@ module.exports = function(grunt)
             return _path;
         },
 
-        resolveLibs     = function( modules, base )
+        resolveLibs     = function( modules, base_patches, base_libraries )
         {
             var mods    = {};
 
@@ -71,17 +71,30 @@ module.exports = function(grunt)
             {
                 typeof mod == "string" && ( mod = { dist : mod } );
 
-                mod.dirname         = resolvePath( mod_name, base );
+                mod.dirname         = resolvePath( mod_name, base_libraries );
 
                 mods[ mod_name ]    = mod.dist  = resolvePath( mod.dist, mod.dirname ).replace( /\.js$/, '' );
+
+                mod.patches         = resolvePatches( mod.patches   || [], base_patches ),
 
                 und.each( mod.modules, function( smod, smod_name )
                 {
                     mods[ smod_name ] = resolvePath( smod, mod.dirname ).replace( /\.js$/, '' );
                 });
+
             });
 
             return mods;
+        },
+
+        resolvePatches  = function( patches, base )
+        {
+            und.each( patches, function( patch, index )
+            {
+                patches[ index ]    = resolvePath( patch, base );
+            });
+
+            return patches;
         },
 
         exec            = function( cmd )
@@ -105,11 +118,28 @@ module.exports = function(grunt)
             return result.code;
         },
 
-        clone           = function( name, git, branch )
+        patch           = function( name, patches, options )
+        {
+            und.each( patches, function( patch )
+            {
+                console.log( patch );
+                grunt.log.subhead( 'Applying Patch [ ' + name + ' ][ Patch: ' + path.basename( patch ) + ' ]' );
+
+                console.log( resolvePath( name, options.libraries ) );
+
+                shell.cd( resolvePath( name, options.libraries ) );
+
+                var result  = exec( 'sudo git am --signoff < ' + patch );
+
+                console.log( result );
+            });
+        },
+
+        clone           = function( name, git, branch ) // sudo git am --signoff < ../../patches/jquery/fix_core_jquery_scope.patch
         {
             grunt.log.subhead( 'Cloning [ ' + name + ' ][ ver: ' + branch + ' ]\n\t' + git );
 
-            var result  = exec( 'git clone ' + git + ' ' + path.join( project_path, 'lib', name ) + ' --branch ' + branch );
+            var result  = exec( 'sudo git clone ' + git + ' ' + path.join( project_path, 'lib', name ) + ' --branch ' + branch );
 
             return result === 128 || result === 0;
         },
@@ -120,7 +150,7 @@ module.exports = function(grunt)
 
                 gruntfile   = path.join( module.dirname, 'Gruntfile.js' );
 
-            grunt.log.subhead( 'Prepare to compile [ ' + name + ' ][ ver: ' + module.version + ' ]' );
+            grunt.log.subhead( 'Prepare to compile [ ' + name + ' ][ ver: ' + module.version + ' ]\n' );
 
             (function( build )
             {
@@ -170,10 +200,14 @@ module.exports = function(grunt)
         {
             var result  = true;
 
+            exec( 'sudo echo "Sudopowers Activated!!"');
+
             und.each( dependencies, function( dep, name )
             {
                 if( !clone( name, dep.git, dep.version ) )
                     return result = false;
+
+                patch( name, dep.patches, options ); 
 
                 compile( name, dep );
             });
@@ -183,7 +217,7 @@ module.exports = function(grunt)
 
         builder         = function( input, output, options )
         {
-            grunt.log.writeln( 'Building file [' + input + '] output [' + output + ']' );
+            grunt.log.writeln( 'Building file [' + input + '] output [' + output + ']\n' );
 
             grunt.verbose.writeln( 'Input File: ' + input + '\nOutput File: ' + output + '\nOptions: \n ' + JSON.stringify( options, null, 4 ) );
 
@@ -233,7 +267,7 @@ module.exports = function(grunt)
 
                         compiled    = contents;
 
-                    grunt.log.writeln( 'Module ' + name );
+                    grunt.log.ok( 'Module ' + name  );
 
                     if( ( lib = options.libraries[ name ] ) && ( compiled = compile( name, lib, _path ) ) )
                         contents    = compiled;
@@ -265,7 +299,7 @@ module.exports = function(grunt)
             {
                 if( build.options.configure )
                 {
-                    if( configure( build.options.dependencies ) )
+                    if( configure( build.options.dependencies, build.options ) )
                         return factory();
                     else
                         throw new Error( 'Configure fails' );
