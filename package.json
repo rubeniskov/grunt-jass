@@ -1,6 +1,6 @@
 {
   "name": "grunt-jass",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "",
   "main": "tasks/build.js",
   "homepage": "https://github.com/foxnet-es/grunt-jass",
@@ -14,8 +14,7 @@
   },
   "license": "ISC",
   "dependencies": {
-    "deasync": "~0.0.7",
-    "nodegit": "^0.1.4",
-    "requirejs": "^2.1.15"
+    "requirejs": "^2.1.15",
+    "shelljs": "^0.3.0"
   }
 }
