@@ -14,7 +14,9 @@
   },
   "license": "ISC",
   "dependencies": {
+    "is": "^2.2.0",
+    "jsdoc": "~3.2.2",
     "requirejs": "^2.1.15",
-    "shelljs": "^0.3.0"
+    "requizzle": "^0.2.1"
   }
 }
