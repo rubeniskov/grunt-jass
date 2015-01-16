@@ -38,11 +38,11 @@ module.exports = function( grunt )
 
         save            = function( result )
         {
-            grunt.file.write( '/Users/ruben.lopez/Enviroment/deploy/ueScript/doc/diagram.json' , JSON.stringify( result, null, 4 ) );
+            grunt.file.write( '/Users/ruben.lopez/Enviroment/deploy/ueScript/doc/schema.json' , JSON.stringify( result, null, 4 ) );
 
             und.each( result, function( module, index )
             {
-                grunt.file.write( path.join( '/Users/ruben.lopez/Enviroment/deploy/ueScript/doc/', 'doc-' + module.name + '.md' ), template({ methods : module.methods }) )
+                grunt.file.write( path.join( '/Users/ruben.lopez/Enviroment/deploy/ueScript/doc/markdown/', 'doc-' + module.name + '.md' ), template({ methods : module.methods }) )
             });
 
             return result;
