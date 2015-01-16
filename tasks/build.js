@@ -36,9 +36,7 @@ module.exports = function(grunt)
 
         resolveOptions  = function( options )
         {
-            var flags               = grunt.option.flags(),
-
-                opt_compile         = grunt.option( 'compile' ),
+            var opt_compile         = grunt.option( 'compile' ),
 
                 opt_configure       = grunt.option( 'configure' );
             
@@ -147,6 +145,8 @@ module.exports = function(grunt)
 
         compile         = function( name, module, options )
         {
+                options     = options || {};
+
             var contents    = false,
 
                 gruntfile   = path.join( module.dirname, 'Gruntfile.js' )
@@ -163,6 +163,8 @@ module.exports = function(grunt)
                 };
 
             grunt.log.subhead( 'Prepare to compile [ ' + name + ' ][ ver: ' + module.version + ' ]\n' );
+
+            console.log( options.compile )
             
             return (function( build )
             {
@@ -227,7 +229,9 @@ module.exports = function(grunt)
                 if( !clone( name, dep.git, dep.version ) )
                     return result = false;
 
-                patch( name, dep.patches, options );
+                patch( name, dep.patches, options ); 
+
+                compile( name, dep );
             });
 
             return result;
@@ -316,14 +320,12 @@ module.exports = function(grunt)
                 if( build.options.configure )
                 {
                     if( configure( build.options.dependencies, build.options ) )
-                        grunt.log.ok( 'Configure fails Done [ ' + build_name + ' ]' );
+                        return factory();
                     else
                         throw new Error( 'Configure fails' );
                 }
-                else
-                {
-                    factory();
-                }
+
+                factory();
             })
             (function()
             {
