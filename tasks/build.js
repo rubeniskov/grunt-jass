@@ -36,7 +36,9 @@ module.exports = function(grunt)
 
         resolveOptions  = function( options )
         {
-            var opt_compile         = grunt.option( 'compile' ),
+            var flags               = grunt.option.flags(),
+
+                opt_compile         = grunt.option( 'compile' ),
 
                 opt_configure       = grunt.option( 'configure' );
             
