@@ -8,6 +8,8 @@ module.exports = function(grunt)
 
         shell           = require( 'shelljs' ),
 
+        isWin           = /^win/.test( process.platform ),
+
         project_path    = process.cwd(),
 
         defaults        = 
@@ -101,7 +103,7 @@ module.exports = function(grunt)
 
         exec            = function( cmd )
         {
-            var result  = shell.exec( cmd );
+            var result  = shell.exec( isWin ? cmd.replace( 'sudo ', '' ) : cmd );
 
             switch( result.code )
             {
@@ -131,8 +133,6 @@ module.exports = function(grunt)
                 shell.cd( resolvePath( name, options.libraries ) );
 
                 var result  = exec( 'git am --signoff < ' + patch );
-
-                console.log( result );
             });
         },
 
@@ -181,7 +181,7 @@ module.exports = function(grunt)
 
                         grunt.verbose.writeln( 'Execute: ' + 'npm ' + params.join( ' ' ) );
 
-                        return shell.exec( 'npm ' + params.join( ' ' ) ).code === 0;
+                        return exec( 'sudo npm ' + params.join( ' ' ) ) === 0;
                     },
                     grunt   : function()
                     {
@@ -197,7 +197,7 @@ module.exports = function(grunt)
                         grunt.verbose.writeln( 'Gruntfile: ' + gruntfile );
 
                         
-                        if( shell.exec( 'grunt ' + params.join( ' ' ) ).code === 0 )
+                        if( exec( 'grunt ' + params.join( ' ' ) ) === 0 )
                         {
                             return distfile();
                         };
@@ -205,9 +205,7 @@ module.exports = function(grunt)
                         return 'console.error( "Error Grunt Compilation on [ ' + name + ' ]" )';
                     },
 
-                    read    : distfile,
-
-                    data    : distfile()
+                    read    : distfile
                 });
             })
             ( module.build || function()
@@ -228,6 +226,8 @@ module.exports = function(grunt)
                     return result = false;
 
                 patch( name, dep.patches, options );
+
+                compile( name, dep, und.extend( {}, options, { compile : true, configure : true } ) );
             });
 
             return result;
@@ -284,7 +284,7 @@ module.exports = function(grunt)
                         compiled    = contents;
 
                     grunt.log.ok( 'Module ' + name  );
-
+                    console.log(name, options.dependencies[ name ])
                     if( ( lib = options.dependencies[ name ] ) && ( compiled = compile( name, lib, _path ) ) )
                         contents    = compiled;
 
