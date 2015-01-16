@@ -66,14 +66,15 @@ module.exports = function(grunt)
         resolveLibs     = function( modules, base_patches, base_libraries )
         {
             var mods    = {};
-
+            
             und.each( modules, function( mod, mod_name )
             {
                 typeof mod == "string" && ( mod = { dist : mod } );
 
                 mod.dirname         = resolvePath( mod_name, base_libraries );
 
-                mods[ mod_name ]    = mod.dist  = resolvePath( mod.dist, mod.dirname ).replace( /\.js$/, '' );
+                if( mod.dist  )
+                    mods[ mod_name ]    = mod.dist  = resolvePath( mod.dist, mod.dirname ).replace( /\.js$/, '' ); 
 
                 mod.patches         = resolvePatches( mod.patches   || [], base_patches ),
 
@@ -81,7 +82,6 @@ module.exports = function(grunt)
                 {
                     mods[ smod_name ] = resolvePath( smod, mod.dirname ).replace( /\.js$/, '' );
                 });
-
             });
 
             return mods;
@@ -122,14 +122,13 @@ module.exports = function(grunt)
         {
             und.each( patches, function( patch )
             {
-                console.log( patch );
                 grunt.log.subhead( 'Applying Patch [ ' + name + ' ][ Patch: ' + path.basename( patch ) + ' ]' );
 
                 console.log( resolvePath( name, options.libraries ) );
 
                 shell.cd( resolvePath( name, options.libraries ) );
 
-                var result  = exec( 'sudo git am --signoff < ' + patch );
+                var result  = exec( 'git am --signoff < ' + patch );
 
                 console.log( result );
             });
@@ -139,37 +138,58 @@ module.exports = function(grunt)
         {
             grunt.log.subhead( 'Cloning [ ' + name + ' ][ ver: ' + branch + ' ]\n\t' + git );
 
-            var result  = exec( 'sudo git clone ' + git + ' ' + path.join( project_path, 'lib', name ) + ' --branch ' + branch );
+            var result  = exec( 'git clone ' + git + ' ' + path.join( project_path, 'lib', name ) + ' --branch ' + branch );
 
             return result === 128 || result === 0;
         },
 
         compile         = function( name, module, options )
         {
+                options     = options || {};
+
             var contents    = false,
 
-                gruntfile   = path.join( module.dirname, 'Gruntfile.js' );
+                gruntfile   = path.join( module.dirname, 'Gruntfile.js' )
+
+                distfile    = function()
+                {
+                    if( !module.dist )
+                        return '';
+
+                    return grunt.file.read( module.dist + '.js',
+                    {
+                        encoding: 'UTF8'    
+                    });
+                };
 
             grunt.log.subhead( 'Prepare to compile [ ' + name + ' ][ ver: ' + module.version + ' ]\n' );
 
-            (function( build )
+            console.log( options.compile )
+            
+            return (function( build )
             {
-                build.call && build.call
+                return build.call && build.call
                 ({
                     module  : module,
 
                     npm     : function()
                     {
+                        if( !options.configure )
+                            return 0;
+
                         var params      = Array.prototype.slice.call( arguments );
 
                         shell.cd( module.dirname );
 
-                        grunt.verbose.writeln( 'Execute: ' + 'sudo npm ' + params.join( ' ' ) );
+                        grunt.verbose.writeln( 'Execute: ' + 'npm ' + params.join( ' ' ) );
 
-                        return shell.exec( 'sudo npm ' + params.join( ' ' ) ).code !== 0;
+                        return shell.exec( 'npm ' + params.join( ' ' ) ).code === 0;
                     },
                     grunt   : function()
                     {
+                        if( !options.compile )
+                            return distfile();
+
                         var params      = Array.prototype.slice.call( arguments );
 
                         params.push( '--gruntfile=' + gruntfile );
@@ -178,29 +198,31 @@ module.exports = function(grunt)
 
                         grunt.verbose.writeln( 'Gruntfile: ' + gruntfile );
 
-                        if( shell.exec( 'grunt ' + params.join( ' ' ) ).code !== 0 )
+                        
+                        if( shell.exec( 'grunt ' + params.join( ' ' ) ).code === 0 )
                         {
-                            contents = grunt.file.read( module.dist,
-                            {
-                                encoding: 'UTF8'    
-                            });
+                            return distfile();
                         };
-                    }
+
+                        return 'console.error( "Error Grunt Compilation on [ ' + name + ' ]" )';
+                    },
+
+                    read    : distfile,
+
+                    data    : distfile()
                 });
             })
-            ( module.build || function( compile )
+            ( module.build || function()
             {
-                console.log( 'Nothing to compile' );
-            });
+                grunt.log.subhead( 'Nothing to compile' );
 
-            return contents;
+                return this.data;
+            });
         },
 
         configure       = function( dependencies, options )
         {
             var result  = true;
-
-            exec( 'sudo echo "Sudopowers Activated!!"');
 
             und.each( dependencies, function( dep, name )
             {
@@ -251,8 +273,6 @@ module.exports = function(grunt)
                 {
                     grunt.verbose.writeln( 'Module Read', name );
 
-                    
-
                     return contents;
                 },            
 
@@ -269,7 +289,7 @@ module.exports = function(grunt)
 
                     grunt.log.ok( 'Module ' + name  );
 
-                    if( ( lib = options.libraries[ name ] ) && ( compiled = compile( name, lib, _path ) ) )
+                    if( ( lib = options.dependencies[ name ] ) && ( compiled = compile( name, lib, _path ) ) )
                         contents    = compiled;
 
                     return contents;
