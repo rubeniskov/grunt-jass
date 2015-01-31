@@ -43,10 +43,10 @@ module.exports = function( grunt )
             {
                 cmp.build( path.resolve( source ), path.resolve( output ), _build.options );
 
-                doc.build( _build.options, function( results )
+                /*doc.build( _build.options, function( results )
                 {
                     //syn.syn( syntax, _build.options );
-                });
+                });*/
             });
             
         });
