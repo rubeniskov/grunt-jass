@@ -15,29 +15,9 @@ module.exports = function( grunt )
 
         is              = require( 'is' ),
 
-        twig            = require('twig').twig,
+        Twig            = require('twig'),
 
         requirejs       = require( 'requirejs' ),
-
-        template        = function( name, _path )
-        {
-            var content = '';
-
-            try
-            {
-                content = grunt.file.read( path.dirname( _path ) + '/source.html', { encoding : 'UTF-8' })
-            }
-            catch( ex )
-            {
-                grunt.log.error( ex );
-            }
-            return content
-                .replace(/\n/g, "")
-                .replace(/[\t ]+\</g, "<")
-                .replace(/\>[\t ]+\</g, "><")
-                .replace(/\>[\t ]+$/g, ">")
-                //.replace( /[\n\t\r]/gi, '' );
-        },
 
         build           = function( source, output, options )
         {
@@ -70,21 +50,73 @@ module.exports = function( grunt )
 
                 onBuildRead             : function( name, _path, contents )
                 {
-                    return parse( contents, und.extend( options ? options.flags : {}, 
-                    {
-                        template : template( name, _path )  
-                    } ) );
+                    return parse( name, _path, contents, options ? options.flags : {} );
                 },
 
                 onBuildWrite        : function( name, _path, contents )
                 {
-                    return banner( 'file', { name : name, path : _path, lines : contents.split(/\r\n|\r|\n/).length }) + evaluate
-                    ( 
-                        contents
-                            .replace( /^(define)/, '__$1')
-                    ) /*+ '\n\n' + template( name, _path );*/
+                    //grunt.log.writeln( name, (/ue.asset/).test( name ) );
+
+                    return banner( 'file', { name : name, path : _path, lines : contents.split(/\r\n|\r|\n/).length })
+                            + evaluate( contents.replace( /^(define)/gi, '__$1') );
+
+
                 }
             });
+        },
+
+        isWidget        = function( name, flags )
+        {
+            return ( /ue\.widget\./ ).test( name );
+        },
+
+        isAsset         = function( name, flags )
+        {
+            return ( /ue\.asset\./ ).test( name );
+        },
+
+        template        = function( name, _path )
+        {
+            var content = '',
+
+                filename= path.dirname( _path ) + '/view.html';
+
+            try
+            {
+                grunt.log.writeln( 'Reading template config ' + filename );
+                   
+                content = grunt.file.read( filename, { encoding : 'UTF-8' })
+            }
+            catch( ex )
+            {
+                grunt.log.error( ex );
+            }
+
+            return content
+                .replace(/\n/g, "")
+                .replace(/[\t ]+\</g, "<")
+                .replace(/\>[\t ]+\</g, "><")
+                .replace(/\>[\t ]+$/g, ">");
+        },
+
+        packageJSON     = function( name, _path )
+        {
+            var content = '{}',
+
+                filename= path.dirname( _path ) + '/package.json';
+
+            try
+            {
+                grunt.log.writeln( 'Reading package config ' + filename );
+                   
+                content = grunt.file.read( filename, { encoding : 'UTF-8' })
+            }
+            catch( ex )
+            {
+                grunt.log.error( ex );
+            }
+
+            return eval( '(' + content + ')' );
         },
 
         banner          = function( type, data  )
@@ -132,14 +164,30 @@ module.exports = function( grunt )
 
             var str     = callback.toString(),
 
-                content = str.slice( str.indexOf( '{' ) + 1, str.lastIndexOf( '}' ) );
+                content = str.slice( str.indexOf( '{' ) + 1, str.lastIndexOf( '}' ) )
 
-            return content;
+            return isAsset( name ) || isWidget( name ) ? '+(function( _ ){' + content + '})( _ )' : content;
         },
 
-        parse           = function( content, flags )
-        {   
-            return twig({ data : content }).render( flags || {} );
+        parse           = function( name, _path, content, flags )
+        {  
+            var widget  = false;
+
+            if( isAsset( name ) || ( widget = isWidget( name ) ) )
+                flags = und.extend( { 'template' : widget ? template( name, _path ) : '' }, flags, packageJSON( name, _path ) );
+
+            try
+            {
+                content = Twig.twig({ data : content }).render( flags || {} )
+            }
+            catch( ex )
+            {
+                console.log( ex );
+
+                grunt.log.error( ex );
+            }
+
+            return content;
         };
 
         evaluate        = function( input, flags )
@@ -155,6 +203,33 @@ module.exports = function( grunt )
 
             return content;
         };
+
+        Twig.extend( function( Twig )
+        {
+            Twig.token.definitions = 
+            [
+                {
+                    type: Twig.token.type.raw,
+                    open: '<% raw %>',
+                    close: '<% endraw %>'
+                },
+                {
+                    type: Twig.token.type.output,
+                    open: '<@',
+                    close: '@>'
+                },
+                {
+                    type: Twig.token.type.logic,
+                    open: '<%',
+                    close: '%>'
+                },
+                {
+                    type: Twig.token.type.comment,
+                    open: '<#',
+                    close: '#>'
+                }
+            ];
+        });
 
     return ({ build : build });
 }
