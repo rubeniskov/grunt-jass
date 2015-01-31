@@ -166,7 +166,7 @@ module.exports = function( grunt )
 
                 content = str.slice( str.indexOf( '{' ) + 1, str.lastIndexOf( '}' ) )
 
-            return isAsset( name ) || isWidget( name ) ? '+(function( _ ){' + content + '})( _ )' : content;
+            return isAsset( name ) || isWidget( name ) ? '+(function(){' + content + '})()' : content;
         },
 
         parse           = function( name, _path, content, flags )
