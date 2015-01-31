@@ -15,9 +15,11 @@ module.exports = function( grunt )
 
         is              = require( 'is' ),
 
-        Twig            = require('twig'),
+        Twig            = require( 'twig' ),
 
         requirejs       = require( 'requirejs' ),
+
+        cache           = {},
 
         build           = function( source, output, options )
         {
@@ -43,14 +45,17 @@ module.exports = function( grunt )
 
                 wrap                    : 
                 {
-                    start       : '(function( factory ){ factory( window ) })(function( global ) {\n\n',
+                    start       : '(function(e,t){e(t,function(e){return function(n,r,i){e[n]=i.apply(t,function(){for(var t=0;t<r.length;t++){r[t]=e[r[t]]}return r}())}}({}))})(function(global,define){\n\n',
 
-                    end         : '\n\n});'
+                    end         : '\n\n},this);'
                 },
 
                 onBuildRead             : function( name, _path, contents )
                 {
-                    return parse( name, _path, contents, options ? options.flags : {} );
+                    if( cache[ name ] )
+                        return cache[ name ];
+                    
+                    return cache[ name ] = parse( name, _path, contents, options ? options.flags : {} );
                 },
 
                 onBuildWrite        : function( name, _path, contents )
@@ -73,6 +78,11 @@ module.exports = function( grunt )
         isAsset         = function( name, flags )
         {
             return ( /ue\.asset\./ ).test( name );
+        },
+
+        isCore         = function( name, flags )
+        {
+            return ( /ue\.core/ ).test( name );
         },
 
         template        = function( name, _path )
@@ -164,9 +174,9 @@ module.exports = function( grunt )
 
             var str     = callback.toString(),
 
-                content = str.slice( str.indexOf( '{' ) + 1, str.lastIndexOf( '}' ) )
+                content = str.slice( str.indexOf( '{' ) + 1, str.lastIndexOf( '}' ) );
 
-            return isAsset( name ) || isWidget( name ) ? '+(function(){' + content + '})()' : content;
+            return isCore( name ) ? content : 'define( "' + name + '", ' + ( deps.length ? '[ "' + deps.join( '","' ) + '" ]' : '[]' ) + ', ' + str + ');';
         },
 
         parse           = function( name, _path, content, flags )
