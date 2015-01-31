@@ -15,7 +15,8 @@
   "license": "ISC",
   "dependencies": {
     "is": "^2.2.0",
-    "jsdoc": "~3.2.2",
+    "twig": "^0.7.2",
+    "yuidocjs": "0.5.0",
     "requirejs": "^2.1.15",
     "requizzle": "^0.2.1"
   }
